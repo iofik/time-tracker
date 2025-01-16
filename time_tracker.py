@@ -195,10 +195,12 @@ class TaskDialog(Gtk.Dialog):
 
         self.set_default_size(300, 150)
 
+        # Создаем контейнер для элементов
+        self.box = self.get_content_area()
+
         # Project combo box
         self.project_combo = Gtk.ComboBoxText.new_with_entry()
         self.project_combo.set_entry_text_column(0)
-        self.project_combo.connect("changed", self.on_project_changed)
         for project in self.projects.keys():
             self.project_combo.append_text(project)
         self.project_combo.append_text("New Project")
@@ -210,16 +212,26 @@ class TaskDialog(Gtk.Dialog):
         self.task_combo.append_text("New Task")
         self.task_combo.set_active(0)
 
-        # Layout
+        # Подключаем сигнал изменения проекта после инициализации task_combo
+        self.project_combo.connect("changed", self.on_project_changed)
+
+        # Создаем сетку для размещения элементов
         grid = Gtk.Grid()
+        grid.set_column_spacing(10)
+        grid.set_row_spacing(10)
         grid.attach(Gtk.Label(label="Project:"), 0, 0, 1, 1)
         grid.attach(self.project_combo, 1, 0, 1, 1)
         grid.attach(Gtk.Label(label="Task:"), 0, 1, 1, 1)
         grid.attach(self.task_combo, 1, 1, 1, 1)
-        self.get_content_area().add(grid)
+
+        # Добавляем сетку в диалоговое окно
+        self.box.add(grid)
 
         # Добавляем кнопки OK и Cancel
         self.add_buttons(Gtk.STOCK_CANCEL, Gtk.ResponseType.CANCEL, Gtk.STOCK_OK, Gtk.ResponseType.OK)
+
+        # Показываем все элементы
+        self.show_all()
 
     def on_project_changed(self, combo):
         project = combo.get_active_text()
