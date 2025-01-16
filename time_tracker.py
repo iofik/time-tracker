@@ -40,6 +40,16 @@ class TimeTrackerApp:
         task_item.connect("activate", self.on_task_clicked)
         self.menu.append(task_item)
 
+        # Day statistics item
+        self.day_item = Gtk.MenuItem.new_with_label("Day: 00:00")
+        self.day_item.set_sensitive(False)  # Делаем пункт неактивным
+        self.menu.append(self.day_item)
+
+        # Week statistics item
+        self.week_item = Gtk.MenuItem.new_with_label("Week: 00:00")
+        self.week_item.set_sensitive(False)  # Делаем пункт неактивным
+        self.menu.append(self.week_item)
+
         # Exit item
         exit_item = Gtk.MenuItem.new_with_label("Exit")
         exit_item.connect("activate", Gtk.main_quit)
@@ -112,12 +122,14 @@ class TimeTrackerApp:
         else:
             self.indicator.set_label("", "")
 
-        # Всплывающая подсказка: Today и Week
-        total_today = self.get_total_time_today()
+        # Обновляем статистику в меню
+        total_day = self.get_total_time_today()  # Метод остался с именем "today", но отображаем как "Day"
         total_week = self.get_total_time_week()
-        total_today_str = self.format_time(total_today)
+        total_day_str = self.format_time(total_day)
         total_week_str = self.format_time(total_week)
-        self.start_stop_item.set_tooltip_text(f"Today: {total_today_str}\nWeek: {total_week_str}")
+
+        self.day_item.set_label(f"Day: {total_day_str}")
+        self.week_item.set_label(f"Week: {total_week_str}")
 
         return True  # Продолжаем обновление
 
