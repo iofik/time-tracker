@@ -7,11 +7,17 @@ from gi.repository import Gtk, AppIndicator3, GLib
 import pandas as pd
 from datetime import datetime, timedelta
 import os
+import json
 
 class TimeTrackerApp:
     def __init__(self):
         self.sessions = []
         self.current_session = None
+        self.projects = {}  # Словарь проектов и задач
+        self.cache_file = "task_cache.json"  # Файл для кэширования проектов и задач
+
+        # Загружаем кэш проектов и задач
+        self.load_cache()
 
         # Create an Application Indicator
         self.indicator = AppIndicator3.Indicator.new(
@@ -28,6 +34,11 @@ class TimeTrackerApp:
         self.start_stop_item = Gtk.MenuItem.new_with_label("Start")
         self.start_stop_item.connect("activate", self.on_start_stop_clicked)
         self.menu.append(self.start_stop_item)
+
+        # Task item
+        task_item = Gtk.MenuItem.new_with_label("Task")
+        task_item.connect("activate", self.on_task_clicked)
+        self.menu.append(task_item)
 
         # Exit item
         exit_item = Gtk.MenuItem.new_with_label("Exit")
@@ -49,12 +60,29 @@ class TimeTrackerApp:
         else:
             self.start_timer()
 
-    def start_timer(self):
+    def on_task_clicked(self, item):
+        # Показываем диалог выбора проекта и задачи
+        dialog = TaskDialog(self.projects)
+        response = dialog.run()
+
+        if response == Gtk.ResponseType.OK:
+            project, task = dialog.get_selected_task()
+            if project and task:
+                # Если таймер запущен, останавливаем текущую сессию
+                if self.current_session:
+                    self.stop_timer()
+
+                # Начинаем новую сессию с выбранными проектом и задачей
+                self.start_timer(project, task)
+
+        dialog.destroy()
+
+    def start_timer(self, project="Project", task="Task"):
         self.current_session = {
             'start_ts': int(datetime.now().timestamp()),
             'end_ts': None,
-            'project': 'Project',
-            'task': 'Task'
+            'project': project,
+            'task': task
         }
         self.start_stop_item.set_label("Stop")
         self.indicator.set_icon_full("gtk-media-record", "Timer Running")  # Зелёная иконка
@@ -67,21 +95,28 @@ class TimeTrackerApp:
             self.save_sessions()
             self.current_session = None
             self.start_stop_item.set_label("Start")
-            self.indicator.set_icon_full("gtk-media-record", "Timer Stopped")  # Иконка по умолчанию
+            self.indicator.set_icon_full("gtk-media-record", "Timer Stopped")  # Красная иконка
             self.update_tray_icon()
 
     def update_tray_icon(self):
+        if self.current_session:
+            # Время текущей сессии
+            start_time = datetime.fromtimestamp(self.current_session['start_ts'])
+            current_time = datetime.now()
+            session_duration = current_time - start_time
+            session_duration_str = self.format_time(session_duration)
+
+            # Надпись в трее: "HH:MM Task name"
+            task_name = self.current_session['task']
+            self.indicator.set_label(f"{session_duration_str} {task_name}", "")
+        else:
+            self.indicator.set_label("", "")
+
+        # Всплывающая подсказка: Today и Week
         total_today = self.get_total_time_today()
         total_week = self.get_total_time_week()
-
-        # Форматируем время до минут
         total_today_str = self.format_time(total_today)
         total_week_str = self.format_time(total_week)
-
-        # Обновляем лейбл в трее
-        self.indicator.set_label(f"Today: {total_today_str}", "")
-
-        # Обновляем всплывающую подсказку
         self.start_stop_item.set_tooltip_text(f"Today: {total_today_str}\nWeek: {total_week_str}")
 
         return True  # Продолжаем обновление
@@ -139,6 +174,102 @@ class TimeTrackerApp:
         if os.path.exists(filename):
             df = pd.read_csv(filename)
             self.sessions = df.to_dict('records')
+
+    def load_cache(self):
+        """Загружает кэш проектов и задач из файла."""
+        if os.path.exists(self.cache_file):
+            with open(self.cache_file, "r") as f:
+                self.projects = json.load(f)
+
+    def save_cache(self):
+        """Сохраняет кэш проектов и задач в файл."""
+        with open(self.cache_file, "w") as f:
+            json.dump(self.projects, f)
+
+class TaskDialog(Gtk.Dialog):
+    def __init__(self, projects, parent=None):
+        super().__init__(title="Select Task", parent=parent, flags=0)
+        self.projects = projects
+        self.selected_project = None
+        self.selected_task = None
+
+        self.set_default_size(300, 150)
+
+        # Project combo box
+        self.project_combo = Gtk.ComboBoxText()
+        self.project_combo.set_entry_text_column(0)
+        self.project_combo.connect("changed", self.on_project_changed)
+        for project in self.projects.keys():
+            self.project_combo.append_text(project)
+        self.project_combo.append_text("New Project")
+        self.project_combo.set_active(0)
+
+        # Task combo box
+        self.task_combo = Gtk.ComboBoxText()
+        self.task_combo.set_entry_text_column(0)
+        self.task_combo.append_text("New Task")
+        self.task_combo.set_active(0)
+
+        # Layout
+        grid = Gtk.Grid()
+        grid.attach(Gtk.Label(label="Project:"), 0, 0, 1, 1)
+        grid.attach(self.project_combo, 1, 0, 1, 1)
+        grid.attach(Gtk.Label(label="Task:"), 0, 1, 1, 1)
+        grid.attach(self.task_combo, 1, 1, 1, 1)
+        self.get_content_area().add(grid)
+
+        self.add_buttons(Gtk.STOCK_CANCEL, Gtk.ResponseType.CANCEL, Gtk.STOCK_OK, Gtk.ResponseType.OK)
+
+    def on_project_changed(self, combo):
+        project = combo.get_active_text()
+        if project == "New Project":
+            self.task_combo.remove_all()
+            self.task_combo.append_text("New Task")
+            self.task_combo.set_active(0)
+        else:
+            self.task_combo.remove_all()
+            for task in self.projects.get(project, []):
+                self.task_combo.append_text(task)
+            self.task_combo.append_text("New Task")
+            self.task_combo.set_active(0)
+
+    def get_selected_task(self):
+        project = self.project_combo.get_active_text()
+        task = self.task_combo.get_active_text()
+
+        if project == "New Project":
+            project = self.show_input_dialog("Enter Project Name")
+            if not project:
+                return None, None
+
+        if task == "New Task":
+            task = self.show_input_dialog("Enter Task Name")
+            if not task:
+                return None, None
+
+        # Обновляем кэш проектов и задач
+        if project not in self.projects:
+            self.projects[project] = []
+        if task not in self.projects[project]:
+            self.projects[project].append(task)
+
+        return project, task
+
+    def show_input_dialog(self, prompt):
+        dialog = Gtk.MessageDialog(
+            transient_for=self,
+            flags=0,
+            message_type=Gtk.MessageType.QUESTION,
+            buttons=Gtk.ButtonsType.OK_CANCEL,
+            text=prompt
+        )
+        entry = Gtk.Entry()
+        dialog.get_content_area().add(entry)
+        dialog.show_all()
+        response = dialog.run()
+        text = entry.get_text()
+        dialog.destroy()
+        return text if response == Gtk.ResponseType.OK else None
 
 if __name__ == "__main__":
     app = TimeTrackerApp()
