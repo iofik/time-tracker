@@ -196,7 +196,7 @@ class TaskDialog(Gtk.Dialog):
         self.set_default_size(300, 150)
 
         # Project combo box
-        self.project_combo = Gtk.ComboBoxText()
+        self.project_combo = Gtk.ComboBoxText.new_with_entry()
         self.project_combo.set_entry_text_column(0)
         self.project_combo.connect("changed", self.on_project_changed)
         for project in self.projects.keys():
@@ -205,7 +205,7 @@ class TaskDialog(Gtk.Dialog):
         self.project_combo.set_active(0)
 
         # Task combo box
-        self.task_combo = Gtk.ComboBoxText()
+        self.task_combo = Gtk.ComboBoxText.new_with_entry()
         self.task_combo.set_entry_text_column(0)
         self.task_combo.append_text("New Task")
         self.task_combo.set_active(0)
@@ -218,6 +218,7 @@ class TaskDialog(Gtk.Dialog):
         grid.attach(self.task_combo, 1, 1, 1, 1)
         self.get_content_area().add(grid)
 
+        # Добавляем кнопки OK и Cancel
         self.add_buttons(Gtk.STOCK_CANCEL, Gtk.ResponseType.CANCEL, Gtk.STOCK_OK, Gtk.ResponseType.OK)
 
     def on_project_changed(self, combo):
@@ -238,12 +239,12 @@ class TaskDialog(Gtk.Dialog):
         task = self.task_combo.get_active_text()
 
         if project == "New Project":
-            project = self.show_input_dialog("Enter Project Name")
+            project = self.project_combo.get_child().get_text()
             if not project:
                 return None, None
 
         if task == "New Task":
-            task = self.show_input_dialog("Enter Task Name")
+            task = self.task_combo.get_child().get_text()
             if not task:
                 return None, None
 
@@ -254,22 +255,6 @@ class TaskDialog(Gtk.Dialog):
             self.projects[project].append(task)
 
         return project, task
-
-    def show_input_dialog(self, prompt):
-        dialog = Gtk.MessageDialog(
-            transient_for=self,
-            flags=0,
-            message_type=Gtk.MessageType.QUESTION,
-            buttons=Gtk.ButtonsType.OK_CANCEL,
-            text=prompt
-        )
-        entry = Gtk.Entry()
-        dialog.get_content_area().add(entry)
-        dialog.show_all()
-        response = dialog.run()
-        text = entry.get_text()
-        dialog.destroy()
-        return text if response == Gtk.ResponseType.OK else None
 
 if __name__ == "__main__":
     app = TimeTrackerApp()
