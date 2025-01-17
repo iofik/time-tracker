@@ -22,7 +22,7 @@ class TimeTrackerApp:
         # Create an Application Indicator
         self.indicator = AppIndicator3.Indicator.new(
             "time-tracker",
-            "gtk-media-record",  # Иконка по умолчанию
+            "gtk-media-record",  # Иконка по умолчанию (зелёная)
             AppIndicator3.IndicatorCategory.APPLICATION_STATUS
         )
         self.indicator.set_status(AppIndicator3.IndicatorStatus.ACTIVE)
@@ -87,6 +87,12 @@ class TimeTrackerApp:
 
         dialog.destroy()
 
+    def get_last_task_name(self):
+        """Возвращает название последнего выполненного таска."""
+        if self.sessions:
+            return self.sessions[-1]['task']
+        return "No tasks"
+
     def start_timer(self, project="Project", task="Task"):
         self.current_session = {
             'start_ts': int(datetime.now().timestamp()),
@@ -105,7 +111,7 @@ class TimeTrackerApp:
             self.save_sessions()
             self.current_session = None
             self.start_stop_item.set_label("Start")
-            self.indicator.set_icon_full("gtk-media-record", "Timer Stopped")  # Красная иконка
+            self.indicator.set_icon_full("gtk-media-pause", "Timer Stopped")  # Серая иконка
             self.update_tray_icon()
 
     def update_tray_icon(self):
@@ -120,10 +126,14 @@ class TimeTrackerApp:
             task_name = self.current_session['task']
             self.indicator.set_label(f"{session_duration_str} {task_name}", "")
         else:
-            self.indicator.set_label("", "")
+            # Когда таймер остановлен, показываем общее время за день и последний таск
+            total_day = self.get_total_time_day()
+            total_day_str = self.format_time(total_day)
+            last_task = self.get_last_task_name()
+            self.indicator.set_label(f"{total_day_str} {last_task}", "")
 
         # Обновляем статистику в меню
-        total_day = self.get_total_time_today()  # Метод остался с именем "today", но отображаем как "Day"
+        total_day = self.get_total_time_day()
         total_week = self.get_total_time_week()
         total_day_str = self.format_time(total_day)
         total_week_str = self.format_time(total_week)
@@ -140,7 +150,7 @@ class TimeTrackerApp:
         minutes, _ = divmod(remainder, 60)
         return f"{hours:02}:{minutes:02}"
 
-    def get_total_time_today(self):
+    def get_total_time_day(self):
         today = datetime.now().date()
         total = timedelta()
         for session in self.sessions:
